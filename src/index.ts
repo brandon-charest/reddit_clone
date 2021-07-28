@@ -8,32 +8,66 @@ import { buildSchema } from "type-graphql";
 import { PostResolver } from "./resolvers/post";
 import cors from "cors";
 import { UserResolver } from "./resolvers/user";
+import redis from "redis";
+import session from "express-session";
+import connectRedis from "connect-redis";
+import { MyContext } from "./types";
 
 const main = async () => {
   const orm = await MikroORM.init(microConfig);
   await orm.getMigrator().up();
   const app = express();
 
+  const RedisStore = connectRedis(session);
+  const redisClient = redis.createClient();
+  app.use(
+    session({
+      name: "qid",
+      store: new RedisStore({
+        client: redisClient,
+        disableTouch: true,
+      }),
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        secure: true,
+        httpOnly: true,
+        sameSite: "none",
+      },
+      secret: "a secret",
+      resave: false,
+      saveUninitialized: false,
+    })
+  );
+
+  app.set("trust proxy", 1);
   // TODO: move to env file
   const allowedOrigins = [
-    "http://localhost:4000",
+    "http://localhost:4000/",
+    "http://localhost:4000/graphql/",
+    "http://localhost:4000/graphql",
     "https://studio.apollographql.com",
   ];
-  const options: cors.CorsOptions = {
+  const corsOptions: cors.CorsOptions = {
     origin: allowedOrigins,
+    credentials: true,
+    // allowedHeaders: [
+    //   "Access-Control-Allow-Origin",
+    //   "Access-Control-Allow-Credentials",
+    // ],
   };
-  app.use(cors(options));
+  app.use(cors(corsOptions));
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
       resolvers: [PostResolver, UserResolver],
       validate: false,
     }),
-    context: () => ({ em: orm.em }),
+
+    context: ({ req, res }): MyContext => ({ em: orm.em, req, res }),
   });
 
   await apolloServer.start();
-  apolloServer.applyMiddleware({ app, cors: false });
+  apolloServer.applyMiddleware({ app, cors: corsOptions });
 
   app.listen(4000, () => {
     console.log("Server started on port 4000");
