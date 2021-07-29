@@ -6,7 +6,6 @@ import express from "express";
 import { ApolloServer } from "apollo-server-express";
 import { buildSchema } from "type-graphql";
 import { PostResolver } from "./resolvers/post";
-import cors from "cors";
 import { UserResolver } from "./resolvers/user";
 import redis from "redis";
 import session from "express-session";
@@ -29,33 +28,15 @@ const main = async () => {
       }),
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 7,
-        secure: true,
+        secure: __prod__,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: "lax",
       },
       secret: "a secret",
       resave: false,
       saveUninitialized: false,
     })
   );
-
-  app.set("trust proxy", 1);
-  // TODO: move to env file
-  const allowedOrigins = [
-    "http://localhost:4000/",
-    "http://localhost:4000/graphql/",
-    "http://localhost:4000/graphql",
-    "https://studio.apollographql.com",
-  ];
-  const corsOptions: cors.CorsOptions = {
-    origin: allowedOrigins,
-    credentials: true,
-    // allowedHeaders: [
-    //   "Access-Control-Allow-Origin",
-    //   "Access-Control-Allow-Credentials",
-    // ],
-  };
-  app.use(cors(corsOptions));
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
@@ -67,7 +48,7 @@ const main = async () => {
   });
 
   await apolloServer.start();
-  apolloServer.applyMiddleware({ app, cors: corsOptions });
+  apolloServer.applyMiddleware({ app });
 
   app.listen(4000, () => {
     console.log("Server started on port 4000");
