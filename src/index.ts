@@ -54,5 +54,5 @@ const main = async () => {
     console.log("Server started on port 4000");
   });
 };
-
+console.log("test");
 main();
